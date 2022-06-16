@@ -1,15 +1,6 @@
 package ru.sber.junior.Services;
 
-import ru.sber.junior.MyAnnotations.Service;
-
-@Service
-public class Light implements LightInterface {
-    public void lightOn() {
-        System.out.println("###  Включаю свет в доме  ###");
-    }
-
-    public void lightOff() throws InterruptedException {
-        System.out.println("###  Выключаю свет в доме  ###");
-        Thread.sleep(2000);
-    }
+public interface Light {
+    void lightOn();
+    void lightOff() throws InterruptedException;
 }

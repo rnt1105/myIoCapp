@@ -2,11 +2,8 @@ package ru.sber.junior.BeanFactory;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import ru.sber.junior.ApplicationContext;
 import ru.sber.junior.MyAnnotations.Autowired;
-import ru.sber.junior.MyAnnotations.Timed;
-import ru.sber.junior.Proxy.TimedProxy;
-import ru.sber.junior.ServiceFinder.ServiceFinder;
-import ru.sber.junior.Services.RadioInterface;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -14,141 +11,101 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class BeanFactory {
-    private static final Logger logger = LogManager.getRootLogger();
-    private static ServiceFinder serviceFinder;
+    private static final Logger logger = LogManager.getLogger(BeanFactory.class);
+    private final ApplicationContext context;
 
-    private static Map<String, Class<?>> foundServices = new HashMap<>();
-    private static final Map<String, Object> preparedBeans = new HashMap<>();
-    private static final Map<String, Object> beans = new HashMap<>();
-
-    public Object getBean(String beanName) {
-        logger.trace("Старт метода [BeanFactory.getBean], бин: [{}]", beanName);
-        return beans.get(beanName);
+    public BeanFactory(ApplicationContext context) {
+        this.context = context;
     }
 
-    public Map<String, Object> run(String packageName) {
-        logger.debug("Старт метода [BeanFactory.run]");
-        servicesSearch(packageName);
-        while (!foundServices.isEmpty() || !preparedBeans.isEmpty()){
-            createBeans(foundServices);
-            createBeansFromPreparedBeans(preparedBeans);
-            cleanMaps();
-        }
-        logger.debug("Завершение работы метода [BeanFactory.run]");
-        return beans;
-    }
+    /**
+     * TODO нужно ли это выносить в отдельное поле?
+     * вопрос над полем private static ServiceFinder serviceFinder;
+     * Убрал, сканер вызываю из контекста
+     * TODO - DONE
+     */
 
-    private void servicesSearch(String packageName) {
-        logger.debug("Старт метода [BeanFactory.servicesSearch]");
-        serviceFinder = new ServiceFinder();
-        logger.debug("Создан ServiceFinder: [{}]", serviceFinder);
-        foundServices = serviceFinder.findServices(packageName);
-        logger.debug("Завершение работы метода [BeanFactory.servicesSearch]");
-    }
+    /**
+     * TODO нужно ли это выносить в отдельное поле? Чем это плохо?
+     * Вопрос над мапами foundServices, preparedBeans, beans.
+     * не храним созданные бины в фабрике, сразу после создания передаём бин в контекст, храним там.
+     * TODO - DONE
+     */
 
-    private void cleanMaps(){
-        for(Map.Entry<String, Object> entry: beans.entrySet()){
-            preparedBeans.remove(entry.getKey());
-            foundServices.remove(entry.getKey());
-        }
-        for(Map.Entry<String, Object> entry: preparedBeans.entrySet()){
-            foundServices.remove(entry.getKey());
-        }
-    }
+    /**
+     * TODO непонятен проход в 2 этапа, почему сразу не вызывать createBean в месте обращения к бину, см. строки 101/189
+     *  Вопрос был над методом run. Метод убрал, создаю бины только по запросу
+     *  TODO - DONE
+     */
 
-    private void createBeans(Map<String, Class<?>> foundServices) {
-        logger.debug("Старт метода [BeanFactory.createBeans]. Сервисы [{}]", foundServices);
-        for (Map.Entry<String, Class<?>> entry : foundServices.entrySet()) {
-            Class<?> beanClass = entry.getValue();
-            createBean(beanClass);
-        }
-        logger.debug("Завершена работа метода [BeanFactory.createBeans]");
-    }
-
-    private void createBean(Class<?> beanClass) {
-        logger.debug("Старт метода [BeanFactory.createBean]. Класс: [{}]", beanClass);
-        Object bean = getBean(beanClass.getSimpleName());
-        if (bean != null) {
-            logger.debug("Сервис [{}] был создан ранее", beanClass.getSimpleName());
-            return;
-        }
+    public Object createBean(Class<?> beanClass) {
+        logger.debug("Старт метода [createBean]. Класс: [{}]", beanClass);
         try {
+            boolean successInjectDependsInFields = true;
+            boolean successInjectDependsInMethods = true;
             if (!hasAutowiredAnnotationInConstructor(beanClass)) {
-                bean = beanClass.getDeclaredConstructor().newInstance();
-                boolean successInjectDepends = true;
+                Object bean = beanClass.getDeclaredConstructor().newInstance();
                 if (hasAutowiredAnnotationInFields(beanClass)) {
-                    successInjectDepends = injectDependsInField(bean, beanClass);
+                    successInjectDependsInFields = injectDependsInField(bean, beanClass);
                 }
-                if(hasAutowiredAnnotationInMethods(beanClass)){
-                    successInjectDepends = injectDependsInMethod(bean, beanClass);
+                if (hasAutowiredAnnotationInMethods(beanClass)) {
+                    successInjectDependsInMethods = injectDependsInMethod(bean, beanClass);
                 }
-                if(successInjectDepends){
+                // TODO может быть неуспешное внедрение через поля и успешное через сеттер, тогда всё считается успешным
+                // TODO - DONE. Согласен, писать всю ночь перед сдачей было плохой идеей. исправил
+                if (successInjectDependsInFields && successInjectDependsInMethods) {
                     logger.info("Сервис [{}] успешно создан", beanClass.getSimpleName());
-                    beans.put(beanClass.getSimpleName(), bean);
+                    return bean;
                 } else {
                     logger.debug("Отсутствуют необходимые бины для внедрения зависимостей и создания сервиса [{}]", beanClass.getSimpleName());
-                    preparedBeans.put(beanClass.getSimpleName(), bean);
                 }
             } else {
                 Constructor constructor = getConstructorWithAutowiredAnnotation(beanClass);
+                if(constructor == null){
+                    logger.error("Ошибка при получении конструктора, помеченного аннотацией @Autowired. Сервис [{}]",beanClass.getSimpleName());
+                    return null;
+                }
                 constructor.setAccessible(true);
                 Class[] parameterTypes = constructor.getParameterTypes();
                 Object[] injectParameters = new Object[parameterTypes.length];
                 int i = 0;
                 for (Class parameter : parameterTypes) {
-                    Object beanForInject = getBean(parameter.getSimpleName());
+                    // TODO почему только из кэша?
+                    //TODO - DONE. беру бин из контекста
+                    Object beanForInject = context.getBean(parameter);
                     if (beanForInject == null) {
                         logger.debug("Невозможно создать сервис [{}], отсутствует бин для внедрения",parameter.getSimpleName());
-                        return;
+                        return null;
                     }
                     injectParameters[i] = parameter.cast(beanForInject);
                     i++;
                 }
                 try {
-                    Object instance = beanClass.getDeclaredConstructor(parameterTypes).newInstance(injectParameters);
-                    boolean successInjectDepends = true;
-                    if(hasAutowiredAnnotationInFields(beanClass)){
-                        successInjectDepends = injectDependsInField(instance, beanClass);
+                    Object bean = beanClass.getDeclaredConstructor(parameterTypes).newInstance(injectParameters);
+                    if (hasAutowiredAnnotationInFields(beanClass)) {
+                        successInjectDependsInFields = injectDependsInField(bean, beanClass);
                     }
-                    if(hasAutowiredAnnotationInMethods(beanClass)){
-                        successInjectDepends = injectDependsInMethod(instance, beanClass);
+                    if (hasAutowiredAnnotationInMethods(beanClass)) {
+                        successInjectDependsInMethods = injectDependsInMethod(bean, beanClass);
                     }
-                    if(successInjectDepends){
+                    if (successInjectDependsInFields && successInjectDependsInMethods) {
                         logger.info("Сервис [{}] успешно создан", beanClass.getSimpleName());
-                        beans.put(beanClass.getSimpleName(), instance);
+                        return bean;
+                    } else {
+                        // TODO что-то не то, сюда всегда доходит исполнение
+                        //TODO - DONE. как и выше, успешное внедрение в метод перезатерало результат внедрения в поле
+                        logger.debug("Не удалось создать сервис [{}]. Нет бина для внедрения", beanClass.getSimpleName());
+                        return null;
                     }
-                    logger.debug("Не удалось создать сервис. Нет бина для внедрения");
-                    preparedBeans.put(beanClass.getSimpleName(), instance);
                 } catch (Exception e) {
-                    logger.error("Ошибка при создании сервиса [{}]", beanClass.getSimpleName());
-                    e.printStackTrace();
+                    logger.error("Ошибка при создании сервиса [{}]. Ошибка: [{}]", beanClass.getSimpleName(), e.toString());
                 }
             }
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-            logger.error("Ошибка при создании сервиса. Класс: [{}]", beanClass);
-            e.printStackTrace();
+            logger.error("Ошибка при создании сервиса [{}]. Ошибка: [{}]", beanClass.getSimpleName(), e.toString());
         }
         logger.debug("Завершение работы метода [BeanFactory.createBean]");
-    }
-
-    private void createBeansFromPreparedBeans(Map<String, Object> preparedBeans){
-        logger.debug("Старт метода [BeanFactory.createBeansFromPreparedBeans]");
-        for(Map.Entry<String, Object> entry: preparedBeans.entrySet()){
-            Object bean = entry.getValue();
-            Class beanClass = bean.getClass();
-            boolean successInjectDepends = true;
-            if(hasAutowiredAnnotationInFields(beanClass)){
-                successInjectDepends = injectDependsInField(bean, beanClass);
-            }
-            if(hasAutowiredAnnotationInMethods(beanClass)){
-                successInjectDepends = injectDependsInMethod(bean, beanClass);
-            }
-            if(successInjectDepends){
-                logger.info("Сервис [{}] успешно создан", beanClass.getSimpleName());
-                beans.put(beanClass.getSimpleName(), bean);
-            }
-            logger.debug("Завершение работы метода [BeanFactory.createBeansFromPreparedBeans]");
-        }
+        return null;
     }
 
     private boolean hasAutowiredAnnotationInConstructor(Class<?> beanClass) {
@@ -158,10 +115,15 @@ public class BeanFactory {
     }
 
     private Constructor getConstructorWithAutowiredAnnotation(Class<?> beanClass) {
-        logger.trace("Выполняется метод [BeanFactory.getConstructorWithAutowiredAnnotation]. Класс: [{}]", beanClass);
+        logger.trace("Выполняется метод [getConstructorWithAutowiredAnnotation]. Класс: [{}]", beanClass);
+
+        /**
+         * TODO Здесь возможен NPE. Необходимо исправить
+         * TODO-DONE. Обрабатываю возможный null в месте вызова метода
+         */
         return Stream.of(beanClass.getDeclaredConstructors())
                 .filter(e -> e.isAnnotationPresent(Autowired.class))
-                .findAny().get();
+                .findAny().orElse(null);
     }
 
     private boolean hasAutowiredAnnotationInFields(Class<?> beanClass) {
@@ -182,16 +144,17 @@ public class BeanFactory {
         for (Field field : fields) {
             field.setAccessible(true);
             Class<?> beanForInjectClass = field.getType();
-            Object beanForInject = getBean(beanForInjectClass.getSimpleName());
-            while (beanForInject == null) {
-                createBean(beanForInjectClass);
-                beanForInject = getBean(beanForInjectClass.getSimpleName());
+            // TODO лучше сразу createBean, он внутри уже проверяет наличие в кэше. Надо просто возвращать объект из этого метода
+            //TODO - DONE. Беру бин из контекста
+            Object beanForInject = context.getBean(beanForInjectClass);
+            if(beanForInject == null){
+                logger.error("Невозможно внедрить зависимость в [{}]. Отсутствует бин для внедрения", beanClass.getSimpleName());
+                return false;
             }
             try {
                 field.set(bean, beanForInject);
             } catch (IllegalAccessException e) {
-                logger.error("Ошибка при внедрении зависимости. Сервис: [{}], поле: [{}]", beanClass.getSimpleName(), field);
-                e.printStackTrace();
+                logger.error("Ошибка при внедрении зависимости. Сервис: [{}], поле: [{}]. Ошибка[{}]", beanClass.getSimpleName(), field, e.toString());
             }
             logger.debug("Внедрены зависимости в полях. Сервис: [{}], поля: [{}]", beanClass.getSimpleName(), fields);
             return true;
@@ -218,8 +181,14 @@ public class BeanFactory {
             Class<?>[] parameterTypes = method.getParameterTypes();
             Object[] beansForInject = new Object[parameterTypes.length];
             int i = 0;
-            for (Class parameterClass : parameterTypes) {
-                Object beanForInject = getBean(parameterClass.getSimpleName());
+            /**
+             * TODO IDEA подсвечивает Class - почему? Исправьте пожалуйста все такие предупреждения в данном классеr
+             * TODO - DONE
+             */
+            for (Class<?> parameterClass : parameterTypes) {
+                //TODO почему через метод только из кэша?
+                //TODO - DONE берем бин из контекста
+                Object beanForInject = context.getBean(parameterClass);
                 if (beanForInject != null) {
                     beansForInject[i] = beanForInject;
                     i++;
@@ -227,15 +196,22 @@ public class BeanFactory {
                     return false;
                 }
             }
-            if (i == parameterTypes.length) {
-                try {
-                    method.invoke(bean, beansForInject);
-                    logger.debug("Успешное внедрение зависимости в сервис: [{}], внедрены объекты: [{}]", bean, beansForInject);
-                    return true;
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    logger.debug("Ошибка при внедрении зависимости. Сервис [ {} ], метод [ {} ], внедряемые объекты [ {} ]", bean, method, beansForInject);
-                    e.printStackTrace();
-                }
+            /**
+             * TODO может ли не выполниться это условие?
+             * Было над if(i==parameterTypes.lenght)
+             * МЕ: убрал, если контекст не вернет бин, мы сюда даже не попадем
+             * TODO - DONE
+             */
+            try {
+                method.invoke(bean, beansForInject);
+                logger.debug("Успешное внедрение зависимости в сервис: [{}], внедрены объекты: [{}]", bean, beansForInject);
+                return true;
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                /**
+                 * TODO для вывода ошибок используется logger#error. Также он должен выводить ошибку, вместо прямого вызова e.printStackTrace()
+                 * TODO - DONE
+                 */
+                logger.debug("Ошибка при внедрении зависимости. Сервис [ {} ], метод [ {} ], внедряемые объекты [ {} ]. Ошибка: [{}]", bean, method, beansForInject, e.toString());
             }
         }
         return false;

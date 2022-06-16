@@ -3,10 +3,7 @@ package ru.sber.junior;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import ru.sber.junior.Services.LightInterface;
-import ru.sber.junior.Services.RadioInterface;
-import ru.sber.junior.Services.SmartHouseInterface;
-import ru.sber.junior.Services.TvInterface;
+import ru.sber.junior.Services.*;
 
 class ApplicationIT {
     private static final String PACKAGE = Runner.class.getPackageName();
@@ -20,28 +17,29 @@ class ApplicationIT {
 
     @Test
     public void smartHouseTest() {
-        SmartHouseInterface smartHouse = (SmartHouseInterface) context.getBean("SmartHouse");
+        SmartHouse smartHouse = context.getBean(SmartHouseImpl.class);
+        //SmartHouse smartHouse = context.getBean("SmartHouse");
         Assertions.assertNotNull(smartHouse);
         Assertions.assertDoesNotThrow(() -> smartHouse.switchOn());
     }
 
     @Test
     public void radioTest() {
-        RadioInterface radio = (RadioInterface) context.getBean("Radio");
+        Radio radio = context.getBean("Radio");
         Assertions.assertNotNull(radio);
         Assertions.assertDoesNotThrow(() -> radio.radioOff());
     }
 
     @Test
     public void tvTest(){
-        TvInterface tv = (TvInterface) context.getBean("Tv");
+        Tv tv = context.getBean("Tv");
         Assertions.assertNotNull(tv);
         Assertions.assertDoesNotThrow(() -> tv.switchOn());
     }
 
     @Test
     public void lightTest(){
-        LightInterface light = (LightInterface) context.getBean("Light");
+        Light light = (Light) context.getBean("Light");
         Assertions.assertNotNull(light);
         Assertions.assertDoesNotThrow(() -> light.lightOn());
     }

@@ -1,17 +1,21 @@
 package ru.sber.junior.Services;
 
-import ru.sber.junior.MyAnnotations.Service;
-import ru.sber.junior.MyAnnotations.Timed;
+/**
+ * TODO предлагаю использовать общепринятый нейминг для интерфейсов и сервисов
+ * Убрал постфикс Interface у интерфейсов,
+ * добавил постфикс Impl у классов, реализующих интерфейс
+ * TODO - DONE
+ */
+public interface Radio {
+    /**
+     * TODO idea подсвечивает модификатор public серым. Почему?
+     * методы, объявленные в интерфейсе, по умолчанию с модификатором доступа public
+     * TODO - DONE
+     */
+    void radioOn() throws InterruptedException;
 
-@Service
-public class Radio implements RadioInterface {
-    @Timed
-    public void radioOn() throws InterruptedException {
-        System.out.println("###  Включаю музыку  ###");
-        Thread.sleep(4000);
-    }
-
-    public void radioOff() {
-        System.out.println("###  Выключаю музыку  ###");
-    }
+    /**
+     * TODO всегда нужно описывать методы интерфейса (javaDoc)
+     */
+    void radioOff();
 }

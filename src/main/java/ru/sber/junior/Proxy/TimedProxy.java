@@ -7,13 +7,26 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 public class TimedProxy implements InvocationHandler {
-    private final static Logger logger = LogManager.getRootLogger();
-    private Object service;
+    /**
+     * TODO для создания логгера необходимо использовать org.apache.logging.log4j.LogManager#getLogger(java.lang.Class)
+     * TODO - DONE
+     */
+    private final static Logger logger = LogManager.getLogger(TimedProxy.class);
+    /**
+     * TODO idea рекомендует поработать над этими полями. Что она рекомендует и зачем?
+     * Сделал поле Service final. Что бы присвоенную ссылку на объект нельзя было изменить
+     * TODO - DONE
+     */
+    private final Object service;
 
     public TimedProxy(Object service) {
         this.service = service;
     }
 
+    /**
+     * TODO сейчас при вызове каждого метода сканируются все методы сервиса. Стоит ли это делать каждый раз?
+     * Можно ли сгенерировать готовый прокси класс, который будет знать, какие методы троебуют дополнительной логики?
+     */
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         Method[] declaredMethods = service.getClass().getDeclaredMethods();
@@ -21,10 +34,19 @@ public class TimedProxy implements InvocationHandler {
             if (myMethod.isAnnotationPresent(Timed.class)) {
                 if (myMethod.getName().equals(method.getName())) {
                     long startMethod = System.currentTimeMillis();
-                    method.invoke(service, args);
+                    Object o = method.invoke(service, args);
                     long finishMethod = System.currentTimeMillis();
-                    logger.info("Метод " + service.getClass().getSimpleName() + "." + method.getName() + " выполнялся: " + ((finishMethod - startMethod) / 1000) + " сек.");
-                    return null;
+                    long runTimeSec = (finishMethod-startMethod)/1000;
+                    /**
+                     * TODO здесь стоит использовать перегрузку org.apache.logging.log4j.Logger#info(java.lang.String, java.lang.Object...)
+                     * Как думаете, почему?
+                     * Думаю, сообщение создавать с помощью конкатенации не безопасно. Передача в качестве параметров безопаснее
+                     * TODO - DONE
+                     */
+                    logger.info("Метод [{}.{}] выполнялся {} секунд", service.getClass().getSimpleName(),method.getName(),runTimeSec);
+                    // TODO потерял возвращаемое значение
+                    //TODO - DONE
+                    return o;
                 }
             }
         }
