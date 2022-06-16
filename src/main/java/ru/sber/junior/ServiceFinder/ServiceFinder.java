@@ -17,8 +17,8 @@ public class ServiceFinder {
     /**
      * TODO нужно ли это выносить в отдельное поле?
      * вопрос над мапой foundServices
-     * Me: не храним найденные сервисы, передаем в BeanFactory
-     * СДЕЛАТЬ
+     * Me: не храним найденные сервисы, передаем в context
+     * TODO - DONE
      */
 
     public Map<String, Class<?>> findServices(String packageName) {

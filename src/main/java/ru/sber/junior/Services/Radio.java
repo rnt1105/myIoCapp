@@ -12,10 +12,22 @@ public interface Radio {
      * методы, объявленные в интерфейсе, по умолчанию с модификатором доступа public
      * TODO - DONE
      */
+
+    /**
+     * Switch ON radio
+     * Writes result in console
+     * @throws InterruptedException
+     */
     void radioOn() throws InterruptedException;
 
     /**
      * TODO всегда нужно описывать методы интерфейса (javaDoc)
+     * TODO - DONE
+     */
+
+    /**
+     * Switch OFF radio
+     * Writes result in console
      */
     void radioOff();
 }

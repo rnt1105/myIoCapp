@@ -7,7 +7,7 @@ import ru.sber.junior.Services.*;
 
 class ApplicationIT {
     private static final String PACKAGE = Runner.class.getPackageName();
-    private static ApplicationContext context = new ApplicationContext();
+    private static final ApplicationContext context = new ApplicationContext();
 
     @BeforeAll
     @Test
@@ -18,7 +18,7 @@ class ApplicationIT {
     @Test
     public void smartHouseTest() {
         SmartHouse smartHouse = context.getBean(SmartHouseImpl.class);
-        //SmartHouse smartHouse = context.getBean("SmartHouse");
+
         Assertions.assertNotNull(smartHouse);
         Assertions.assertDoesNotThrow(() -> smartHouse.switchOn());
     }
@@ -27,7 +27,7 @@ class ApplicationIT {
     public void radioTest() {
         Radio radio = context.getBean("Radio");
         Assertions.assertNotNull(radio);
-        Assertions.assertDoesNotThrow(() -> radio.radioOff());
+        Assertions.assertDoesNotThrow(() -> radio.radioOn());
     }
 
     @Test
@@ -39,8 +39,8 @@ class ApplicationIT {
 
     @Test
     public void lightTest(){
-        Light light = (Light) context.getBean("Light");
+        Light light = context.getBean("Light");
         Assertions.assertNotNull(light);
-        Assertions.assertDoesNotThrow(() -> light.lightOn());
+        Assertions.assertDoesNotThrow(() -> light.lightOff());
     }
 }
